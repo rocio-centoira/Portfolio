@@ -1,0 +1,318 @@
+use portfolio
+
+select  cliente.city, cliente.[Product line], count (cliente.[Product line]) over (partition by cliente.city) as total_per_line
+from tipo_cliente cliente
+group by  cliente.city, cliente.[Product line] 
+order by cliente.city
+
+
+
+
+select cli.Gender, cli.Total, cli.Quantity, cli.City, count(cli.gender) over (partition by cli.gender) as tgen
+from tipo_cliente cli
+
+SELECT
+    CASE 
+        WHEN gender = 'male' THEN
+            CAST((dbo.tipo_cliente.quantity / 499) * 100 AS NVARCHAR(15))
+        when gender = 'female' then 
+		    CAST((dbo.tipo_cliente.quantity / 501) * 100 AS NVARCHAR(15))
+        ELSE 
+            'no value'
+    END AS promedio_cantidad_por_compra_masc
+FROM tipo_cliente
+
+
+--creation table
+
+drop table if exists #temp_tables
+create table  #temp_tables (  Gender nvarchar(255), Total float, Quantity float, City nvarchar(255),
+ total_gender NVARCHAR(15) )
+
+ --insert into table
+
+insert into #temp_tables
+select cli.Gender, cli.Total, cli.Quantity, cli.City, count(cli.gender) over (partition by cli.gender) as total_gender
+from portfolio.dbo.tipo_cliente cli
+
+--adding a new column
+ALTER TABLE #temp_tables
+ADD promedio_compra NVARCHAR(15)
+
+--adding values to the new column
+use portfolio
+
+UPDATE #temp_tables
+SET promedio_compra =
+
+       CASE 
+        WHEN #temp_tables.Gender = 'male' THEN
+            CAST((tipo_cliente.quantity / 499)  AS NVARCHAR(15))
+        when #temp_tables.Gender = 'female' then 
+		    CAST((tipo_cliente.quantity / 501)  AS NVARCHAR(15))
+        ELSE 
+            'no value'
+    END
+FROM #temp_tables
+JOIN tipo_cliente ON #temp_tables.Gender = tipo_cliente.Gender
+
+
+--check of complete new temp_table
+  select *
+  from #temp_tables
+  order by #temp_tables.City
+
+  ---------------
+  --correcion columna
+  select *
+  from ventas
+  alter table ventas
+  drop column porcetnaje_compras_segun_metodo_pago
+
+  --------
+  --add percentage column
+
+  alter table ventas
+  add porcentaje_compras_segun_metod real
+
+  
+
+
+  -- view only one gender results order by max tax
+
+  select  v.city, v.payment, count(v.city) over (partition by v.city) as c , tipo_cliente.[Tax 5%], tipo_cliente.Quantity
+   , tipo_cliente.Gender, tipo_cliente.Total, MAX(tipo_cliente.[Tax 5%]) as highest_tax_paid,
+   count ( v.payment) over (partition by v.payment) as l, porcentaje_compras_segun_metod
+  from ventas v
+   full outer join tipo_cliente
+  on v.City = tipo_cliente.City
+  where tipo_cliente.Gender <> 'female'
+GROUP BY v.City, v.payment, tipo_cliente.[Tax 5%], tipo_cliente.Quantity, tipo_cliente.Gender, tipo_cliente.Total, porcentaje_compras_segun_metod
+HAVING MAX(tipo_cliente.[Tax 5%]) IS NOT NULL
+ORDER BY highest_tax_paid desc
+
+------------------------------------------
+-- view percentage of type of cliente acording to gender 
+
+create view Percentage_Type_of_Cliente_x_Gender as
+SELECT 
+    cli.[Customer type],
+    cli.Gender,
+    COUNT(cli.[Customer type]) AS count_each_type,
+	    CAST(SUM(CASE WHEN Gender IS NOT NULL THEN 1 ELSE 0 END) AS INT) as sum_each_gender,
+    COUNT(cli.[Customer type]) * 100.0 / SUM(COUNT(cli.[Customer type])) OVER () AS percentage_each_type
+FROM 
+    tipo_cliente cli
+GROUP BY
+    cli.[Customer type],  cli.Gender
+
+
+----------------------------------------------------------
+
+
+	--- math check
+select [customer type] , gender ,cast(sum(case when cli.[Customer type] like 'member' then 1 else 0 end) as int) as sum_each_type,
+CAST(SUM(CASE WHEN Gender IS NOT NULL THEN 1 ELSE 0 END) AS INT) as sum_each_gender
+
+from tipo_cliente cli
+GROUP BY
+    [Customer type], Gender
+ORDER BY
+    [Customer type], Gender DESC
+
+	select cli.[Customer type], gender
+	from tipo_cliente cli
+	where gender like 'male' and [Customer type] like 'normal'
+	ORDER BY
+    [Customer type], Gender desc
+-----------------------
+
+--changes to the date
+update housing_data
+set housing_data.saledate = convert(date, saledate)
+
+alter table housing_data
+add ndate date
+ 
+update housing_data
+ set  ndate = convert(date, saledate)
+
+ALTER TABLE housing_data
+DROP COLUMN saledate
+
+------------------------
+
+
+--changing value null
+
+select data.parcelid, data.propertyaddress, data.uniqueid, isnull(data.propertyaddress, b.PropertyAddress),
+b.parcelid, b.propertyaddress, b.uniqueid
+from housing_data data
+join housing_data b
+on data.ParcelID =b.ParcelID
+and data.uniqueid <> b.uniqueid 
+where data.propertyaddress is null
+
+update data
+set propertyaddress = isnull(data.propertyaddress, b.PropertyAddress)
+from housing_data data
+join housing_data b
+on data.ParcelID =b.ParcelID
+and data.uniqueid <> b.uniqueid 
+where data.propertyaddress is null
+
+
+select *
+from housing_data data
+order by data.propertyaddress desc
+-----------------------------------------------
+use Portfolio_privado
+
+select 
+ SUBSTRING(propertyaddress, 1, CHARINDEX(',', propertyaddress + ',') - 1) as string_muestra
+
+from housing_data 
+
+
+---------------------
+
+--modify a compost string
+use Portfolio_privado
+select 
+ SUBSTRING(propertyaddress, 1, CHARINDEX(',', propertyaddress + ',') - 1) as address,
+--SUBSTRING(propertyaddress, 1, CHARINDEX(',', propertyaddress) -1) as address
+substring(propertyaddress, charindex(',', propertyaddress) +1, len(propertyaddress)) as city
+from housing_data 
+
+alter table housing_data
+add address nvarchar(50)
+
+
+alter table housing_data
+add city nvarchar(100)
+
+update housing_data
+set  address =  SUBSTRING(propertyaddress, 1, CHARINDEX(',', propertyaddress + ',') - 1) 
+
+update housing_data
+set city = substring(propertyaddress, charindex(',', propertyaddress) +1, len(propertyaddress)) 
+
+select address, city
+from housing_data
+
+--------------------------------------
+
+
+--separeta a string
+select 
+ parsename(replace(owneraddress, ',','.'),  3) as street_address,
+  parsename(replace(owneraddress, ',','.') , 2) as pr_state,
+   parsename(replace(owneraddress, ',','.'),  1) as siglas
+from housing_data
+-----------------
+
+
+
+alter table housing_data
+add street_address nvarchar(50)
+
+
+alter table housing_data
+add pr_address nvarchar(50)
+
+
+alter table housing_data
+add siglas nvarchar(5)
+
+
+
+update housing_data
+set street_address = parsename(replace(owneraddress, ',','.'),  3)
+
+update housing_data
+set pr_address = parsename(replace(owneraddress, ',','.'),  2)
+
+update housing_data
+set siglas = parsename(replace(owneraddress, ',','.'),  1)
+
+
+-------------------------
+--change data points names
+
+select distinct landuse, count(landuse)
+from housing_data
+group by landuse
+order by 2
+
+update housing_data
+set landuse = case when landuse ='church' then 'igles'
+else landuse
+end
+from housing_data
+where LandUse = 'i%'
+-------------------
+
+--id duplicates and delete them
+
+--cte to be able to delete columns
+WITH rankingCTE AS (
+    SELECT *,
+    ROW_NUMBER() OVER (PARTITION BY parcelid, 
+	legalreference,saleprice  ORDER BY uniqueid) AS doubles
+    FROM housing_data
+)
+
+--delete
+select *
+FROM rankingCTE
+WHERE doubles > 1
+--ORDER BY OwnerName
+
+--------------------------------------
+
+--deleted column
+
+
+
+alter table housing_data
+drop column taxdistrict
+
+select*
+from housing_data
+
+--------------------
+
+
+use My_portfolio
+
+
+
+drop table if exists  States_data
+create table States_data (columntodrop nvarchar(100) ,states nvarchar(50), Beef_industry_value DECIMAL(10, 2), 
+Dairy_value DECIMAL(10, 2), Fruit_value DECIMAL(10, 2), Veggies_value DECIMAL(10, 2),
+Wheat_value DECIMAL(10, 2), Corn_value DECIMAL(10, 2))
+
+
+--modify a compost string
+
+insert into States_data
+
+
+select text,
+left(text, charindex('<br>beef',text)-1) as state
+, CONVERT(DECIMAL(10, 2),SUBSTRING(text, CHARINDEX('beef', text) + LEN('beef'), CHARINDEX(' Dairy', text) - CHARINDEX('beef', text)- LEN('beef'))) AS Beef_industry_value
+, CONVERT(DECIMAL(10, 2),SUBSTRING(text, CHARINDEX(' Dairy', text) + LEN(' Dairy'), CHARINDEX('<br>fruits', text) - CHARINDEX(' Dairy', text)- LEN(' Dairy'))) AS Dairy_value
+, CONVERT(DECIMAL(10, 2),SUBSTRING(text, CHARINDEX('<br>fruits', text) + LEN('<br>fruits'), CHARINDEX(' Veggies', text) - CHARINDEX('<br>fruits', text)- LEN('<br>fruits'))) AS Fruit_value
+, CONVERT(DECIMAL(10, 2),SUBSTRING(text, CHARINDEX(' Veggies', text) + LEN(' Veggies'), CHARINDEX('<br>wheat', text) - CHARINDEX(' Veggies', text)- LEN(' Veggies'))) AS Veggies_value
+, CONVERT(DECIMAL(10, 2), SUBSTRING(text, CHARINDEX('<br>wheat', text) + LEN('<br>wheat'), CHARINDEX(' Corn', text) - CHARINDEX('<br>wheat', text) - LEN('<br>wheat'))) AS Wheat_values
+, CONVERT(DECIMAL(10, 2), SUBSTRING(text, CHARINDEX('Corn ', text) + LEN('Corn '), LEN(text) - CHARINDEX('Corn ', text) + 1)) AS Corn_value
+
+from vegan_data veg
+
+-----modify table
+ALTER TABLE States_data
+DROP COLUMN columntodrop
+
+select *
+from States_data data
+---------------------------------------
