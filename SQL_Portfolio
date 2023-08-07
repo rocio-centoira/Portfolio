@@ -1,0 +1,150 @@
+Use My_portfolio
+
+insert into 
+select ha.[Country name], ha.year, ha.[Healthy life expectancy at birth], ha.[Log GDP per capita], ha.Generosity,
+an.[Country name], an.[Explained by: Log GDP per capita],
+an.[Regional indicator], an.[Explained by: Healthy life expectancy]
+from happness_report ha
+left join anual_report an
+on ha.[Country name] = an.[Country name]
+order by ha.[Country name], ha.year
+
+drop table if exists summary
+create table summary( Country_name nvarchar(50), date nvarchar(5), Life_expectancy nvarchar(17), GDP nvarchar(17), Generosity nvarchar(17),
+continent nvarchar(50), Best_life_expectancy nvarchar(10) , higher_scores  nvarchar(50))
+
+insert into summary
+select ha.[Country name], ha.year, ha.[Healthy life expectancy at birth], ha.[Log GDP per capita], ha.Generosity,
+an.[Regional indicator], 
+  MAX(ha.[Healthy life expectancy at birth]) AS Bestlife_expectancy,
+CASE WHEN max(ha.[Healthy life expectancy at birth] + ha.[Log GDP per capita] + ha.Generosity) IS NULL THEN 'could not compute' ELSE CAST(MAX(ha.[Healthy life expectancy at birth] + ha.[Log GDP per capita] + ha.Generosity) AS VARCHAR(100)) END AS higher_scores
+FROM happness_report ha
+left join anual_report an
+on ha.[Country name] = an.[Country name]
+group by  ha.[Country name], ha.year, ha.[Healthy life expectancy at birth], ha.[Log GDP per capita], ha.Generosity,
+an.[Regional indicator]
+order by  higher_scores asc
+
+select*
+from summary
+order by higher_scores asc
+
+
+
+---Other example of skills
+
+use My_Portfolio
+
+use My_Portfolio
+
+
+--subquerys
+
+select *
+from Space_objects so
+where so.Entity like 'un%'
+
+--subquery to find the coutry with no space lunches
+
+select *
+from Space_objects so
+where  not exists( 
+               SELECT AVG(yearly_launches) 
+			   FROM space_objects
+			   Having AVG(yearly_launches)  > 1 )
+
+-- year with most lunches
+
+select entity,year, yearly_launches, 
+MAX(so.yearly_launches)over (partition by entity) AS maxim_launch, 
+MAX(so.year)over (partition by entity) AS maxim_year
+from Space_objects so
+--GROUP BY entity, year, yearly_launches
+order by  entity desc
+
+
+--- add a column with the maxim values 
+
+Alter Table Space_Objects
+Add maxim_launch int
+
+
+--cte to be able to operate, and transfer the values
+
+WITH valuem AS (
+    select entity, max(yearly_launches) OVER (PARTITION BY entity) AS maxim
+    FROM Space_Objects
+)
+UPDATE Space_Objects
+SET maxim_launch = valuem.maxim
+from valuem
+where Space_Objects.entity = valuem.entity
+
+
+--add column
+
+alter table Space_objects
+add cant_launches int
+
+--cte to be able to operate, and transfer the values
+
+WITH valuen AS (
+    select entity, sum(yearly_launches) AS ln
+    FROM Space_Objects
+	group by Entity
+)
+UPDATE Space_Objects
+SET cant_launches = valuen.ln
+from valuen
+where Space_Objects.entity = valuen.entity
+
+
+--- reduce table to the top and bottom results
+
+
+alter table Space_objects
+add codtb tinyint
+
+UPDATE Space_Objects
+SET codtb =
+       CASE WHEN(
+	    SELECT COUNT(*)
+        FROM space_objects AS sub
+        WHERE sub.entity = space_objects.entity
+        AND sub.yearly_launches >= space_objects.yearly_launches
+    ) = 1 THEN 1 ELSE 0 END 
+
+
+---creation of CTE to be table to join the top and bottom rslt as a new table
+
+
+drop table if exists Top_results
+create table Top_results(Entity nvarchar(255), Code nvarchar(255), year float, yearly_launches float,
+                         maxim_launch int, cant_launches int, cotb tinyint)
+
+
+with top10asc as(
+                SELECT top 10*
+                FROM space_objects
+                WHERE codtb = 1
+                ORDER BY maxim_launch asc
+
+                  ),
+
+ top10desc as(
+                SELECT top 10*
+                FROM space_objects
+                WHERE codtb = 1
+                ORDER BY maxim_launch desc)
+
+
+INSERT INTO Top_results (Entity, Code, year, yearly_launches, maxim_launch, cant_launches, cotb)
+SELECT *
+FROM Top10Asc
+UNION ALL
+SELECT *
+FROM Top10Desc
+
+select *
+from Top_results
+order by maxim_launch desc
